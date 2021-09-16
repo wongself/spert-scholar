@@ -1,7 +1,10 @@
 from configparser import ConfigParser
 import datetime
 from flask import Flask, jsonify, request
+import hashlib
+import json
 import nltk
+import os
 from pathlib import Path
 from waitress import serve
 
@@ -36,25 +39,57 @@ def hello():
 def extract():
     if request.method == 'POST':
         source = request.form['source']
-        jsentences = nltk.sent_tokenize(source)
-        jtokens = [nltk.word_tokenize(jsentence) for jsentence in jsentences]
+        isForce = request.form['isForce']
 
-        # Parse document
-        jdocument = []
-        for jtoken in jtokens:
-            doc = {"tokens": jtoken, "entities": [], "relations": []}
-            jdocument.append(doc)
-        # logger.info(f'Document parsed: {jdocument}')
+        logger.info(f'isForce: {isForce}, source: {len(source)}')
 
-        # Predict
-        start_time = datetime.datetime.now()
-        jextract = trainer.eval(jdoc=jdocument)
-        end_time = datetime.datetime.now()
-        logger.info(f'Predicting time: {(end_time - start_time).microseconds} μs')
-        # logger.info(f'Predicted result: {jextract}')
+        hl = hashlib.md5()
+        hl.update(source.encode(encoding='utf-8'))
+        docHash = hl.hexdigest()
 
-        return jsonify({'jextract': jextract})
-    return jsonify({'jextract': ''})
+        cacheDir = './data/cache'
+
+        if not os.path.exists(cacheDir):
+            os.makedirs(cacheDir)
+
+        cacheFile = cacheDir + f'/{docHash}.json'
+        logger.info(f'hex: {docHash}')
+
+        if not os.path.exists(cacheFile) or isForce:
+            # Tokenize document
+            sentenceList = nltk.sent_tokenize(source)
+            tokenList = [
+                nltk.word_tokenize(sentenceItem)
+                for sentenceItem in sentenceList
+            ]
+
+            # Constrcut document
+            document = []
+            for tokenItem in tokenList:
+                doc = {"tokens": tokenItem, "entities": [], "relations": []}
+                document.append(doc)
+            logger.info(f'{len(document)} sentences constructed')
+
+            # Predict sentences
+            startTime = datetime.datetime.now()
+            result = trainer.eval(jdoc=document)
+            endTime = datetime.datetime.now()
+            logger.info(
+                f'Predicting time: {(endTime - startTime).microseconds} μs')
+            logger.info(f'{len(result)} results predicted')
+
+            # Cache sentences
+            with open(cacheFile, "w") as f:
+                json.dump({'result': result}, f)
+                logger.info(f'Result {docHash} cached')
+        else:
+            with open(cacheFile, 'r') as f:
+                loaded = json.load(f)
+                result = loaded['result']
+                logger.info(f'Cached {docHash} fetched')
+
+        return jsonify({'result': result})
+    return jsonify({'result': []})
 
 
 if __name__ == "__main__":

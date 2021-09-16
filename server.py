@@ -53,7 +53,7 @@ def extract():
         cacheFile = cacheDir + f'/{docHash}.json'
 
         if not os.path.exists(cacheFile) or isForce:
-            logger.info('Try to fetch cached result')
+            logger.info('Try to extract new document')
 
             # Tokenize document
             sentenceList = nltk.sent_tokenize(source)

@@ -2,9 +2,6 @@
 
 ## 安装部署
 
-### 模块测试
-- [信息抽取模块测试: 2334](http://101.124.42.4:2334)
-
 ### 环境依赖
 - nltk (tested with version 3.5)
 - numpy (tested with version 1.19.2)

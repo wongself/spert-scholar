@@ -59,5 +59,5 @@ def query_extarct():
 
 if __name__ == "__main__":
     init_extarct()
-    # app.run(host='0.0.0.0', port=2334, debug=False)
-    serve(app, host="0.0.0.0", port=2334)
+    # app.run(host='0.0.0.0', port=5000, debug=False)
+    serve(app, host="0.0.0.0", port=5000)

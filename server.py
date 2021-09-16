@@ -39,9 +39,7 @@ def hello():
 def extract():
     if request.method == 'POST':
         source = request.form['source']
-        isForce = request.form['isForce']
-
-        logger.info(f'isForce: {isForce}, source: {len(source)}')
+        isForce = request.form['isForce'] == 'true'
 
         hl = hashlib.md5()
         hl.update(source.encode(encoding='utf-8'))
@@ -53,9 +51,10 @@ def extract():
             os.makedirs(cacheDir)
 
         cacheFile = cacheDir + f'/{docHash}.json'
-        logger.info(f'hex: {docHash}')
 
         if not os.path.exists(cacheFile) or isForce:
+            logger.info('Try to fetch cached result')
+
             # Tokenize document
             sentenceList = nltk.sent_tokenize(source)
             tokenList = [
@@ -83,6 +82,9 @@ def extract():
                 json.dump({'result': result}, f)
                 logger.info(f'Result {docHash} cached')
         else:
+            logger.info('Try to fetch cached result')
+
+            # Cache sentences
             with open(cacheFile, 'r') as f:
                 loaded = json.load(f)
                 result = loaded['result']

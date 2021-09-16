@@ -32,8 +32,8 @@ def hello_world():
     return 'Nobody Likes Problem'
 
 
-@app.route('/query_extarct', methods=['POST'])
-def query_extarct():
+@app.route('/extract', methods=['POST'])
+def extract():
     if request.method == 'POST':
         source = request.form['source']
         jsentences = nltk.sent_tokenize(source)

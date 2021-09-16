@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.config.from_object('configure')
 
 
-def init_extarct():
+def start():
     global trainer
     global logger
     cfg = ConfigParser()
@@ -28,8 +28,8 @@ def init_extarct():
 
 
 @app.route('/')
-def hello_world():
-    return 'Nobody Likes Problem'
+def hello():
+    return 'Hammer is God'
 
 
 @app.route('/extract', methods=['POST'])
@@ -44,20 +44,20 @@ def extract():
         for jtoken in jtokens:
             doc = {"tokens": jtoken, "entities": [], "relations": []}
             jdocument.append(doc)
-        logger.info(f'Document parsed: {jdocument}')
+        # logger.info(f'Document parsed: {jdocument}')
 
         # Predict
         start_time = datetime.datetime.now()
         jextract = trainer.eval(jdoc=jdocument)
         end_time = datetime.datetime.now()
         logger.info(f'Predicting time: {(end_time - start_time).microseconds} μs')
-        logger.info(f'Predicted result: {jextract}')
+        # logger.info(f'Predicted result: {jextract}')
 
         return jsonify({'jextract': jextract})
     return jsonify({'jextract': ''})
 
 
 if __name__ == "__main__":
-    init_extarct()
+    start()
     # app.run(host='0.0.0.0', port=5000, debug=False)
     serve(app, host="0.0.0.0", port=5000)

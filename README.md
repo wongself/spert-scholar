@@ -5,9 +5,9 @@
 ### 环境依赖
 - nltk (tested with version 3.5)
 - numpy (tested with version 1.19.2)
-- scikit-learn (tested with version 0.23.2)
-- torch 1.1.0+ (tested with version 1.6.0)
-- tqdm (tested with version 4.50.2)
+- scikit-learn (tested with version 0.24.2)
+- torch 1.4.0+ (tested with version 1.8.0)
+- tqdm (tested with version 4.62.2)
 - transformers 2.2.0+ (tested with version 3.4.0)
 
 ### 环境安装

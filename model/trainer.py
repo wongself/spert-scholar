@@ -170,6 +170,7 @@ class SpanTrainer(BaseTrainer):
                 evaluator.eval_batch(entity_clf, rel_clf, rels, batch)
 
         jpredictions = evaluator.store_predictions()
+        torch.cuda.empty_cache()
 
         return jpredictions
 

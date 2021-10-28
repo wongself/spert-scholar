@@ -8,7 +8,7 @@
 - scikit-learn (tested with version 0.24.2)
 - torch 1.4.0+ (tested with version 1.8.0)
 - tqdm (tested with version 4.62.2)
-- transformers 2.2.0+ (tested with version 3.4.0)
+- transformers 3.4.0+ (tested with version 4.11.3)
 
 ### 环境安装
 1. 位于项目根目录，输入命令`cp -r /data/wsf/nobody-likes-problem/data ./`来导入信息抽取模块运行所需的预训练模型、外部数据等必要资料。

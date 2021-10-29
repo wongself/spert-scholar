@@ -16,9 +16,8 @@ def create_directory(d):
 def extend_tensor(tensor, extended_shape, fill=0):
     tensor_shape = tensor.shape
 
-    extended_tensor = torch.zeros(
-        extended_shape,
-        dtype=tensor.dtype).to(tensor.device)
+    extended_tensor = torch.zeros(extended_shape,
+                                  dtype=tensor.dtype).to(tensor.device)
     extended_tensor = extended_tensor.fill_(fill)
 
     if len(tensor_shape) == 1:
@@ -54,13 +53,11 @@ def batch_index(tensor, index, pad=False):
         raise Exception()
 
     if not pad:
-        return torch.stack([tensor[i][index[i]] for i in range(index.shape[0])])
+        return torch.stack(
+            [tensor[i][index[i]] for i in range(index.shape[0])])
     else:
-        return padded_stack([tensor[i][index[i]] for i in range(index.shape[0])])
-
-
-def swap(v1, v2):
-    return v2, v1
+        return padded_stack(
+            [tensor[i][index[i]] for i in range(index.shape[0])])
 
 
 def get_span_tokens(tokens, span):
@@ -86,7 +83,3 @@ def to_device(batch, device):
         converted_batch[key] = batch[key].to(device)
 
     return converted_batch
-
-
-
-

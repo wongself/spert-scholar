@@ -43,7 +43,7 @@ class SpERT(BertPreTrainedModel):
             for param in self.bert.parameters():
                 param.requires_grad = False
 
-    def _forward_eval(
+    def _forward_inference(
         self, encodings: torch.tensor, context_masks: torch.tensor,
         entity_masks: torch.tensor, entity_sizes: torch.tensor,
         entity_spans: torch.tensor, entity_sample_masks: torch.tensor): # noqa
@@ -184,7 +184,7 @@ class SpERT(BertPreTrainedModel):
         return batch_relations, batch_rel_masks, batch_rel_sample_masks
 
     def forward(self, *args, **kwargs):
-        return self._forward_eval(*args, **kwargs)
+        return self._forward_inference(*args, **kwargs)
 
 
 def get_token(h: torch.tensor, x: torch.tensor, token: int):

@@ -1,20 +1,15 @@
 import math
-import os
 from tqdm import tqdm
 
 import torch
-from torch.nn import DataParallel
 from torch.utils.data import DataLoader
 
 from transformers import BertConfig
 from transformers import BertTokenizer
 
-from . import models
-from . import sampling
-from . import util
+from . import models, prediction, sampling, util
 from .entity import Dataset
-from .evaluator import Evaluator
-from .reader import JsonInputReader
+from .reader import BaseInputReader, JsonPredictionInputReader
 
 
 class BaseTrainer:
@@ -23,41 +18,38 @@ class BaseTrainer:
         self._args = cfg
 
         # Arguments
-        self._tokenizer_path = self._args.get(
-            'preprocessing', 'tokenizer_path')
-        self._max_span_size = self._args.getint(
-            'preprocessing', 'max_span_size')
-        self._lowercase = self._args.getboolean(
-            'preprocessing', 'lowercase')
-        self._sampling_processes = self._args.getint(
-            'preprocessing', 'sampling_processes')
+        self._gpu = self._args.getint('model', 'gpu')
+        self._cpu = self._args.getboolean('model', 'cpu')
+
+        self._model_type = self._args.get('model', 'model_type')
+        self._model_path = self._args.get('model', 'model_path')
+        self._tokenizer_path = self._args.get('model', 'tokenizer_path')
+        self._types_path = self._args.get('model', 'types_path')
+
+        self._eval_batch_size = self._args.getint('model', 'eval_batch_size')
+        self._rel_filter_threshold = self._args.getfloat(
+            'model', 'rel_filter_threshold')
+        self._size_embedding = self._args.getint('model', 'size_embedding')
+        self._prop_drop = self._args.getfloat('model', 'prop_drop')
+        self._max_span_size = self._args.getint('model', 'max_span_size')
+        self._sampling_processes = self._args.getint('model',
+                                                     'sampling_processes')
+        self._max_pairs = self._args.getint('model', 'max_pairs')
+        self._freeze_transformer = self._args.getboolean(
+            'model', 'freeze_transformer')
+        self._no_overlapping = self._args.getboolean('model', 'no_overlapping')
+        self._lowercase = self._args.getboolean('model', 'lowercase')
 
         # self._label = self._args.get('logging', 'label')
         self._log_path = self._args.get('logging', 'log_path')
         # self._debug = self._args.getboolean('logging', 'debug')
 
-        self._model_type = self._args.get('model', 'model_type')
-        self._model_path = self._args.get('model', 'model_path')
-        self._gpu = self._args.getint('model', 'gpu')
-        self._cpu = self._args.getboolean('model', 'cpu')
-        self._eval_batch_size = self._args.getint('model', 'eval_batch_size')
-        self._size_embedding = self._args.getint('model', 'size_embedding')
-        self._rel_filter_threshold = self._args.getfloat('model', 'rel_filter_threshold')
-        self._prop_drop = self._args.getfloat('model', 'prop_drop')
-        self._max_pairs = self._args.getint('model', 'max_pairs')
-        self._freeze_transformer = self._args.getboolean(
-            'model', 'freeze_transformer')
-        self._no_overlapping = self._args.getboolean(
-            'model', 'no_overlapping')
-
-        self._types_path = self._args.get('input', 'types_path')
-
         self._logger = logger
 
         # CUDA devices
-        self._device = torch.device(
-            'cuda:' + str(self._gpu) if torch.cuda.is_available()
-            and not self._cpu else 'cpu')
+        self._device = torch.device('cuda:' +
+                                    str(self._gpu) if torch.cuda.is_available(
+                                    ) and not self._cpu else 'cpu')
         self._gpu_count = torch.cuda.device_count()
 
 
@@ -70,13 +62,13 @@ class SpanTrainer(BaseTrainer):
         self._tokenizer = BertTokenizer.from_pretrained(
             self._tokenizer_path, do_lower_case=self._lowercase)
 
-        # Input reader
-        self._reader = JsonInputReader(
+        # input reader
+        self._reader = JsonPredictionInputReader(
             self._types_path,
             self._tokenizer,
             max_span_size=self._max_span_size)
 
-        # Create model
+        # load model
         model_class = models.get_model(self._model_type)
 
         config = BertConfig.from_pretrained(self._model_path)
@@ -99,60 +91,34 @@ class SpanTrainer(BaseTrainer):
         #     self._model = torch.nn.DataParallel(self._model, device_ids=[0,])
         self._model.to(self._device)
 
-        # path to export predictions to
-        self._predictions_path = os.path.join(
-            self._log_path, 'predictions_%s_epoch_%s.json')
+    def predict(self, docs: list):
+        # read datasets
+        dataset = self._reader.read(docs, 'dataset')
 
-    def eval(self, jdoc: list):
-        dataset_label = 'prediction'
+        result = self._predict(self._model, dataset, self._reader)
 
-        self._logger.info("Model: %s" % self._model_type)
+        return result
 
-        # Read datasets
-        self._reader.read({dataset_label: jdoc})
-        self._log_datasets()
-
-        # evaluate
-        jpredictions = self._eval(
-            self._model, self._reader.get_dataset(dataset_label))
-
-        self._logger.info("Logged in: %s" % self._log_path)
-
-        return jpredictions
-
-    def _eval(
-        self, model: torch.nn.Module,
-        dataset: Dataset, epoch: int = 0,
-        updates_epoch: int = 0, iteration: int = 0): # noqa
-
-        self._logger.info("Evaluate: %s" % dataset.label)
-
-        if isinstance(model, DataParallel):
-            # currently no multi GPU support during evaluation
-            model = model.module
-
-        # create evaluator
-        evaluator = Evaluator(
-            dataset, self._reader, self._tokenizer,
-            self._rel_filter_threshold, self._no_overlapping,
-            self._predictions_path, epoch, dataset.label)
-
+    def _predict(self, model: torch.nn.Module, dataset: Dataset,
+                 input_reader: BaseInputReader):
         # create data loader
         dataset.switch_mode(Dataset.EVAL_MODE)
-        data_loader = DataLoader(
-            dataset,
-            batch_size=self._eval_batch_size,
-            shuffle=False,
-            drop_last=False,
-            num_workers=self._sampling_processes,
-            collate_fn=sampling.collate_fn_padding)
+        data_loader = DataLoader(dataset,
+                                 batch_size=self._eval_batch_size,
+                                 shuffle=False,
+                                 drop_last=False,
+                                 num_workers=self._sampling_processes,
+                                 collate_fn=sampling.collate_fn_padding)
+
+        pred_entities = []
+        pred_relations = []
 
         with torch.no_grad():
             model.eval()
 
             # iterate batches
             total = math.ceil(dataset.document_count / self._eval_batch_size)
-            for batch in tqdm(data_loader, total=total, desc='Evaluate epoch %s' % epoch):
+            for batch in tqdm(data_loader, total=total, desc='Predict'):
                 # move batch to selected device
                 batch = util.to_device(batch, self._device)
 
@@ -166,24 +132,16 @@ class SpanTrainer(BaseTrainer):
                     entity_sample_masks=batch['entity_sample_masks'])
                 entity_clf, rel_clf, rels = result
 
-                # evaluate batch
-                evaluator.eval_batch(entity_clf, rel_clf, rels, batch)
+                # convert predictions
+                predictions = prediction.convert_predictions(
+                    entity_clf, rel_clf, rels, batch,
+                    self._rel_filter_threshold, input_reader)
 
-        jpredictions = evaluator.store_predictions()
-        torch.cuda.empty_cache()
+                batch_pred_entities, batch_pred_relations = predictions
+                pred_entities.extend(batch_pred_entities)
+                pred_relations.extend(batch_pred_relations)
 
-        return jpredictions
+        result = prediction.store_predictions(dataset.documents, pred_entities,
+                                              pred_relations)
 
-    def _log_datasets(self):
-        self._logger.info("Entity type count: %s" % self._reader.entity_type_count)
-
-        self._logger.info("Entities:")
-        for e in self._reader.entity_types.values():
-            self._logger.info(e.verbose_name + '=' + str(e.index))
-
-        for k, d in self._reader.datasets.items():
-            self._logger.info('Document: %s' % k)
-            self._logger.info("Sentences count: %s" % d.document_count)
-            # self._logger.info("Entity count: %s" % d.entity_count)
-
-        self._logger.info("Context size: %s" % self._reader.context_size)
+        return result

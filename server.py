@@ -23,7 +23,7 @@ def start():
     global logger
     cfg = ConfigParser()
     configuration_path = Path(__file__).resolve(
-        strict=True).parent / 'configs' / 'extract_eval.conf'
+        strict=True).parent / 'configs' / 'extract_predict.conf'
     cfg.read(configuration_path)
     logger = Logger(cfg)
     logger.info(f'Configuration parsed: {cfg.sections()}')
@@ -65,13 +65,17 @@ def extract():
             # Constrcut document
             document = []
             for tokenItem in tokenList:
-                doc = {"tokens": tokenItem, "entities": [], "relations": []}
-                document.append(doc)
+                doc = {"tokens": tokenItem}
+                if len(tokenItem) <= 200:
+                    document.append(doc)
+                else:
+                    logger.info(
+                        f'A sentence of length {len(tokenItem)} discarded')
             logger.info(f'{len(document)} sentences constructed')
 
             # Predict sentences
             startTime = datetime.datetime.now()
-            result = trainer.eval(jdoc=document)
+            result = trainer.predict(docs=document)
             endTime = datetime.datetime.now()
             logger.info(
                 f'Predicting time: {(endTime - startTime).microseconds} μs')
@@ -97,4 +101,4 @@ def extract():
 if __name__ == "__main__":
     start()
     # app.run(host='0.0.0.0', port=5000, debug=False)
-    serve(app, host="0.0.0.0", port=5000)
+    serve(app, host="0.0.0.0", port=3989)

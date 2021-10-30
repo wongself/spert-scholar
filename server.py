@@ -32,7 +32,7 @@ def start():
 
 @app.route('/')
 def hello():
-    return 'Hammer is God'
+    return 'Hammer is Great'
 
 
 @app.route('/extract', methods=['POST'])
